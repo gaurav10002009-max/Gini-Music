@@ -9,10 +9,11 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout Clean Upstream Code
+      - name: Checkout Official Stable Release (v1.4.3)
         uses: actions/checkout@v4
         with:
           repository: EchoMusicApp/Echo-Music
+          ref: v1.4.3
           submodules: recursive
 
       - name: Set up JDK 21
@@ -22,27 +23,34 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Install Android SDK, NDK 27 & CMake
+      - name: Configure Android SDK & Accept Licenses
         run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.0.12077973" "cmake;3.22.1" || true
-          # Fallback compileSdk from 37 to 36 if preview SDK 37 is not available on runner
-          if ! $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed | grep -q "platforms;android-37"; then
-            $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-37" || find . -name "build.gradle.kts" -type f -exec sed -i 's/compileSdk = 37/compileSdk = 36/g; s/targetSdk = 37/targetSdk = 36/g' {} +
-          fi
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
 
       - name: Safely Rebrand Display Name to Gini Music
         run: |
+          # Replace display strings inside strings.xml safely without breaking XML syntax
           find app/src/main/res -name "strings.xml" -type f -exec sed -i 's/Echo Music/Gini Music/g; s/Echo Brain/Gini Brain/g; s/Echo Find/Gini Find/g; s/Echo Wrapped/Gini Wrapped/g; s/>Echo</>Gini Music</g' {} +
 
-      - name: Build Gini Music APK
+      - name: Compile Gini Music APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleUniversalFossDebug -x spotlessCheck -x lint
+          export GRADLE_OPTS="-Xmx6144m -Dfile.encoding=UTF-8"
+          # Try GMS Debug first (official default), and automatically fall back to FOSS Debug if needed
+          ./gradlew assembleUniversalGmsDebug -x spotlessCheck -x lint --no-daemon > build_log.txt 2>&1 || ./gradlew assembleUniversalFossDebug -x spotlessCheck -x lint --no-daemon >> build_log.txt 2>&1
 
       - name: Upload Finished Gini Music APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Gini-Music-APK
           path: app/build/outputs/apk/**/*.apk
+
+      - name: Print Exact Error If Anything Fails
+        if: failure()
+        run: |
+          echo "=== EXACT BUILD ERROR ==="
+          grep -E "(FAILURE:|What went wrong:|^\* |Exception|Error:)" -A 15 build_log.txt | tail -n 60 || tail -n 80 build_log.txt
           
