@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout Repository & Submodules
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -23,21 +23,17 @@ jobs:
 
       - name: Safe Rebrand from Echo to Gini
         run: |
-          # 1. Change App ID to com.gini.music
-          sed -i 's/applicationId = ".*"/applicationId = "com.gini.music"/g' app/build.gradle.kts
-          sed -i 's/"Echo Music"/"Gini Music"/g' app/build.gradle.kts
-
-          # 2. Safely replace display text inside strings.xml ONLY (without breaking XML tags or Kotlin code)
+          # Safely replace display text inside strings.xml ONLY
           find app/src/main/res -name "strings.xml" -type f -exec sed -i 's/Echo Music/Gini Music/g; s/Echo Brain/Gini Brain/g; s/Echo Find/Gini Find/g; s/Echo Wrapped/Gini Wrapped/g; s/>Echo</>Gini Music</g' {} +
 
-          # 3. Safely update AndroidManifest label if hardcoded
+          # Safely update AndroidManifest label if hardcoded
           sed -i 's/android:label="Echo[^"]*"/android:label="Gini Music"/g' app/src/main/AndroidManifest.xml
 
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
       - name: Build Gini Music APK
-        run: ./gradlew assembleUniversalFossDebug -x spotlessCheck -x lint
+        run: ./gradlew assembleUniversalGmsDebug -x spotlessCheck -x lint
 
       - name: Upload Finished Gini Music APK
         uses: actions/upload-artifact@v4
