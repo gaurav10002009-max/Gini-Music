@@ -34,9 +34,66 @@ jobs:
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
 
-      - name: Safely Rebrand Display Name to Gini Music
+      - name: Complete Zero-Error Gini Music Rebrand
         run: |
-          find app/src/main/res -name "strings.xml" -type f -exec sed -i 's/Echo Music/Gini Music/g; s/Echo Brain/Gini Brain/g; s/Echo Find/Gini Find/g; s/Echo Wrapped/Gini Wrapped/g; s/>Echo</>Gini Music</g' {} +
+          python3 - << 'EOF'
+          import os, re, glob
+
+          # 1. Replace every Echo name inside all strings.xml files
+          for path in glob.glob("**/res/values*/strings.xml", recursive=True):
+              with open(path, "r", encoding="utf-8") as f:
+                  content = f.read()
+              def fix_xml(m):
+                  open_tag, val, close_tag = m.group(1), m.group(2), m.group(3)
+                  val = re.sub(r'(?i)echo\s+music', 'Gini Music', val)
+                  val = re.sub(r'(?i)echo\s+brain', 'Gini Brain', val)
+                  val = re.sub(r'(?i)echo\s+find', 'Gini Find', val)
+                  val = re.sub(r'(?i)echo\s+wrapped', 'Gini Wrapped', val)
+                  val = re.sub(r'\bEcho\b', 'Gini', val)
+                  return open_tag + val + close_tag
+              content = re.sub(r'(<string[^>]*>)(.*?)(</string>)', fix_xml, content, flags=re.DOTALL)
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(content)
+
+          # 2. Force launcher label to "Gini Music" in AndroidManifest.xml
+          for path in glob.glob("app/src/**/AndroidManifest.xml", recursive=True):
+              with open(path, "r", encoding="utf-8") as f:
+                  content = f.read()
+              content = re.sub(r'android:label="[^"]*"', 'android:label="Gini Music"', content)
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(content)
+
+          # 3. Replace app_name overrides in app/build.gradle.kts
+          if os.path.exists("app/build.gradle.kts"):
+              with open("app/build.gradle.kts", "r", encoding="utf-8") as f:
+                  content = f.read()
+              content = re.sub(r'resValue\(\s*"string"\s*,\s*"app_name"\s*,\s*"[^"]*"\s*\)', 'resValue("string", "app_name", "Gini Music")', content)
+              content = content.replace('"Echo Music"', '"Gini Music"').replace('"Echo Debug"', '"Gini Music"')
+              with open("app/build.gradle.kts", "w", encoding="utf-8") as f:
+                  f.write(content)
+
+          # 4. Safely replace hardcoded UI titles inside Kotlin UI screens
+          for path in glob.glob("app/src/main/**/*.kt", recursive=True):
+              with open(path, "r", encoding="utf-8") as f:
+                  lines = f.readlines()
+              changed = False
+              for i, line in enumerate(lines):
+                  if line.strip().startswith("@") or "import " in line or "package " in line or "Log." in line:
+                      continue
+                  new_line = line
+                  new_line = re.sub(r'"Echo Music"', '"Gini Music"', new_line)
+                  new_line = re.sub(r'"Echo Brain"', '"Gini Brain"', new_line)
+                  new_line = re.sub(r'"Echo Find"', '"Gini Find"', new_line)
+                  new_line = re.sub(r'"Echo Wrapped"', '"Gini Wrapped"', new_line)
+                  new_line = re.sub(r'Text\(\s*"Echo"\s*', 'Text("Gini Music"', new_line)
+                  new_line = re.sub(r'title\s*=\s*"Echo"', 'title = "Gini Music"', new_line)
+                  if new_line != line:
+                      lines[i] = new_line
+                      changed = True
+              if changed:
+                  with open(path, "w", encoding="utf-8") as f:
+                      f.writelines(lines)
+          EOF
 
       - name: Compile Gini Music APK
         run: |
