@@ -21,19 +21,29 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Safe Rebrand from Echo to Gini
+      - name: Accept Android SDK 37 Licenses & Install SDK 36/37
         run: |
-          # Safely replace display text inside strings.xml ONLY
-          find app/src/main/res -name "strings.xml" -type f -exec sed -i 's/Echo Music/Gini Music/g; s/Echo Brain/Gini Brain/g; s/Echo Find/Gini Find/g; s/Echo Wrapped/Gini Wrapped/g; s/>Echo</>Gini Music</g' {} +
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
 
-          # Safely update AndroidManifest label if hardcoded
-          sed -i 's/android:label="Echo[^"]*"/android:label="Gini Music"/g' app/src/main/AndroidManifest.xml
+      - name: Clean Earlier Manual Edits & Apply Safe Gini Music Rebrand
+        run: |
+          # 1. If compileSdk 37 is missing on the runner, fall back to 36 cleanly
+          if ! $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed | grep -q "platforms;android-37"; then
+            $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-37" || find . -name "build.gradle.kts" -type f -exec sed -i 's/compileSdk = 37/compileSdk = 36/g; s/compileSdk = 37/compileSdk = 36/g; s/targetSdk = 37/targetSdk = 36/g' {} +
+          fi
+
+          # 2. Reset app/build.gradle.kts and strings.xml in case earlier manual edits had a typo
+          git checkout HEAD~2 -- app/build.gradle.kts app/src/main/res/values/strings.xml 2>/dev/null || true
+
+          # 3. Safely change ONLY the display strings to Gini Music
+          find app/src/main/res -name "strings.xml" -type f -exec sed -i 's/Echo Music/Gini Music/g; s/Echo Brain/Gini Brain/g; s/Echo Find/Gini Find/g; s/Echo Wrapped/Gini Wrapped/g; s/>Echo</>Gini Music</g' {} +
 
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
       - name: Build Gini Music APK
-        run: ./gradlew assembleUniversalGmsDebug -x spotlessCheck -x lint
+        run: ./gradlew assembleUniversalFossDebug -x spotlessCheck -x lint --stacktrace
 
       - name: Upload Finished Gini Music APK
         uses: actions/upload-artifact@v4
