@@ -23,6 +23,11 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Generate Android Debug Keystore
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Configure Android SDK & Accept Licenses
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
@@ -31,26 +36,17 @@ jobs:
 
       - name: Safely Rebrand Display Name to Gini Music
         run: |
-          # Replace display strings inside strings.xml safely without breaking XML syntax
           find app/src/main/res -name "strings.xml" -type f -exec sed -i 's/Echo Music/Gini Music/g; s/Echo Brain/Gini Brain/g; s/Echo Find/Gini Find/g; s/Echo Wrapped/Gini Wrapped/g; s/>Echo</>Gini Music</g' {} +
 
       - name: Compile Gini Music APK
         run: |
           chmod +x gradlew
           export GRADLE_OPTS="-Xmx6144m -Dfile.encoding=UTF-8"
-          # Try GMS Debug first (official default), and automatically fall back to FOSS Debug if needed
-          ./gradlew assembleUniversalGmsDebug -x spotlessCheck -x lint --no-daemon > build_log.txt 2>&1 || ./gradlew assembleUniversalFossDebug -x spotlessCheck -x lint --no-daemon >> build_log.txt 2>&1
+          ./gradlew assembleUniversalFossDebug -x spotlessCheck -x lint
 
       - name: Upload Finished Gini Music APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Gini-Music-APK
-          path: app/build/outputs/apk/**/*.apk
-
-      - name: Print Exact Error If Anything Fails
-        if: failure()
-        run: |
-          echo "=== EXACT BUILD ERROR ==="
-          grep -E "(FAILURE:|What went wrong:|^\* |Exception|Error:)" -A 15 build_log.txt | tail -n 60 || tail -n 80 build_log.txt
+          path: app/build/outputs/apk/universalFoss/debug/*.apk
           
